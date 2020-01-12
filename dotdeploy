@@ -75,7 +75,7 @@ class DotDeploy:
         """
         output a given error to the console and optionally exit(1)
         """
-        print("{}: error: {}".format(os.path.basename(__file__), message))
+        print("{}: error: {}".format(os.path.basename(self._parser.prog), message))
         if exit:
             sys.exit(exit_code)
 
