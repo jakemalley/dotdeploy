@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import copy
+import shutil
+import argparse
+import configparser
+
+
+class DotDeploy:
+    def __init__(self):
+
+        self._parser = argparse.ArgumentParser()
+        self._parser._positionals.title = "command"
+        subparsers = self._parser.add_subparsers(dest="command")
+
+        apply_group = subparsers.add_parser("apply", help="apply a given profile")
+        apply_group.add_argument("profile")
+
+    def cli(self):
+
+        self._args = self._parser.parse_args()
+        if not self._args.command:
+            self.show_help()
+
+        if self._args.command == "apply":
+            self.apply()
+
+    def show_help(self):
+        self._parser.print_help(sys.stderr)
+        sys.exit(1)
+
+    def error(self, message, exit=True, exit_code=1):
+        print("{}: error: {}".format(os.path.basename(__file__), message))
+        if exit:
+            sys.exit(exit_code)
+
+    def groups(self, config):
+        return [
+            s
+            for s in config.sections()
+            if s != "settings" and not s.endswith(".settings")
+        ]
+
+    def backup(self, config, path):
+        backup_base_path = os.path.join(config["settings"]["base_path"], "backup")
+        if not os.path.isdir(backup_base_path):
+            os.mkdir(backup_base_path)
+
+        backup_filename = path.replace("/", "_")[1:]
+        backup_path = os.path.join(backup_base_path, backup_filename)
+
+        if os.path.isfile(path):
+            shutil.copyfile(path, backup_path, follow_symlinks=True)
+
+    def apply(self):
+        """
+        1. read profile config
+        2. process 'groups' i.e. for each group make sure a folder exists for the group
+        """
+
+        if not os.path.isfile(self._args.profile):
+            self.error("no such file {}".format(self._args.profile))
+
+        config = configparser.ConfigParser()
+        try:
+            config.read(self._args.profile)
+        except configparser.ParsingError as ex:
+            self.error(str(ex).replace("\n", ""))
+
+        if "settings" not in config:
+            config.add_section("settings")
+            config.set("settings", "mode", "link")
+            config.set("settings", "backup", "false")
+
+        if config["settings"].get("groups_directory", None):
+            base_path = os.path.abspath(config["settings"]["groups_directory"])
+        else:
+            base_path = os.path.abspath(os.path.dirname(self._args.profile))
+
+        config.set("settings", "base_path", base_path)
+
+        if not os.path.isdir(base_path):
+            self.error(
+                "groups directory not found: no such directory: {}".format(base_path)
+            )
+
+        for group in self.groups(config):
+            group_path = os.path.join(base_path, group)
+            if not os.path.isdir(group_path):
+                self.error(
+                    "groups directory not found: no such directory: {}".format(
+                        group_path
+                    )
+                )
+
+        for group in self.groups(config):
+            # update the settings with the group specific settings
+            settings = copy.deepcopy(config._sections["settings"])
+            settings.update(config._sections.get("{}.settings".format(group), {}))
+            # list of the files we will deploy
+            files = config._sections[group]
+            # iterate over the files and deploy them
+            for file_name, deploy_path in files.items():
+
+                if os.path.isabs(file_name):
+                    self.error(
+                        "file name cannot be an absolute path: {}".format(file_name)
+                    )
+                abs_file_name = os.path.join(base_path, group, file_name)
+
+                if os.path.isabs(deploy_path):
+                    abs_deploy_path = deploy_path
+                else:
+                    abs_deploy_path = os.path.join(base_path, deploy_path)
+
+                if settings.get("backup", "false").lower() in ["true", "yes"]:
+                    self.backup(config, abs_deploy_path)
+
+                if settings.get("mode", "link").lower() in ["copy", "cp"]:
+                    shutil.copyfile(abs_file_name, abs_deploy_path)
+                else:
+                    if os.path.isfile(abs_deploy_path):
+                        os.remove(abs_deploy_path)
+                    os.symlink(abs_file_name, abs_deploy_path)
+
+
+if __name__ == "__main__":
+    DotDeploy().cli()
