@@ -2,10 +2,23 @@
 
 A simple dotfile deployment system written in Python (Currently a work in progress!)
 
+# installation
+
+Using Pip:
+```
+pip install .
+```
+
+Manually (as a standalone script)
+```
+cp dotdeploy/dotdeploy.py /usr/local/bin/dotdeploy
+chmod +x /usr/local/bin/dotdeploy
+```
+
 ## usage
 
 ```
-./dotdeploy apply example.ini
+./dotdeploy apply docs/example.ini
 ```
 
 ## development

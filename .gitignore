@@ -4,4 +4,6 @@ __pycache__/
 .coverage
 backup/
 venv/
+dist/
 .vscode/
+/*.egg-info

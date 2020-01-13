@@ -10,6 +10,7 @@ import configparser
 
 class DotDeploy:
 
+    NAME = "dotdeploy"
     VERSION = "0.1"
 
     def __init__(self):
@@ -252,6 +253,8 @@ class DotDeploy:
             else:
                 self.error("validation failed: one or more errors occured")
 
+        if self._args.verbose > 0:
+            print("validation success exiting 0")
         sys.exit(0)
 
 
