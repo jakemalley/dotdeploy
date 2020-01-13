@@ -49,7 +49,9 @@ class DotDeploy:
         apply_command.add_argument("profile", help="path to a profile.ini file")
 
         # initialise a config parser
-        self._config = configparser.ConfigParser()
+        self._config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation()
+        )
 
     def cli(self):
         """
@@ -84,10 +86,15 @@ class DotDeploy:
         """
         load a given profile into the config attribute
         """
-        # attempt to load the profile
+        # ensure the profile is a valid file
         if not os.path.isfile(self._args.profile):
             self.error("no such file {}".format(self._args.profile))
 
+        # add a global section for value interpolation
+        self._config.add_section("global")
+        self._config.set("global", "home", os.path.expanduser("~"))
+
+        # attempt to read the profile
         try:
             self._config.read(profile_file)
         except configparser.ParsingError as ex:
@@ -99,26 +106,27 @@ class DotDeploy:
             self._config.set("settings", "mode", "link")
             self._config.set("settings", "backup", "false")
 
-        # configure the base path and add to the default settings
+        # configure the base path and add to the global section
         if self._config["settings"].get("groups_directory", None):
             base_path = os.path.abspath(self._config["settings"]["groups_directory"])
         else:
             base_path = os.path.abspath(os.path.dirname(profile_file))
 
-        self._config.set("settings", "base_path", base_path)
+        self._config.set("global", "base_path", base_path)
 
-        return self._config
+        # return as a dictionary as config._sections doesn't provide value interpolation
+        return {s: dict(self._config.items(s)) for s in self._config.sections()}
 
     def validate(self, config, quiet=True):
         """
         validate a given profile
         """
         # ensure the base path actually exists
-        if not os.path.isdir(config["settings"]["base_path"]):
+        if not os.path.isdir(config["global"]["base_path"]):
             if not quiet:
                 self.error(
                     "directory not found: no such directory: {}".format(
-                        config["settings"]["base_path"]
+                        config["global"]["base_path"]
                     ),
                     exit=False,
                 )
@@ -138,7 +146,7 @@ class DotDeploy:
         # for each group ensure it exists, and then check the files
         for group in self.groups(config):
 
-            group_path = os.path.join(config["settings"]["base_path"], group)
+            group_path = os.path.join(config["global"]["base_path"], group)
             if not os.path.isdir(group_path):
                 valid = False
                 if not quiet:
@@ -152,10 +160,10 @@ class DotDeploy:
                 continue
 
             # list of the files in this group
-            files = config._sections[group]
+            files = config[group]
             for file_name, _ in files.items():
                 abs_file_name = os.path.join(
-                    config["settings"]["base_path"], group, file_name
+                    config["global"]["base_path"], group, file_name
                 )
                 if not os.path.isfile(abs_file_name):
                     valid = False
@@ -171,17 +179,18 @@ class DotDeploy:
         """
         return a list of groups to deploy (excludes settings and *.settings)
         """
+        blacklisted_sections = ["DEFAULT", "global", "settings"]
         return [
-            s
-            for s in config.sections()
-            if s != "settings" and not s.endswith(".settings")
+            k
+            for k in config
+            if k not in blacklisted_sections and not k.endswith(".settings")
         ]
 
     def backup(self, config, path):
         """
         backup a given file
         """
-        backup_base_path = os.path.join(config["settings"]["base_path"], "backup")
+        backup_base_path = os.path.join(config["global"]["base_path"], "backup")
         if not os.path.isdir(backup_base_path):
             os.mkdir(backup_base_path)
 
@@ -203,10 +212,10 @@ class DotDeploy:
 
         for group in self.groups(config):
             # update the settings with the group specific settings
-            settings = copy.deepcopy(config._sections["settings"])
-            settings.update(config._sections.get("{}.settings".format(group), {}))
+            settings = copy.deepcopy(config["settings"])
+            settings.update(config.get("{}.settings".format(group), {}))
             # list of the files we will deploy
-            files = config._sections[group]
+            files = config[group]
             # iterate over the files and deploy them
             for file_name, deploy_path in files.items():
 
@@ -215,14 +224,14 @@ class DotDeploy:
                         "file name cannot be an absolute path: {}".format(file_name)
                     )
                 abs_file_name = os.path.join(
-                    config["settings"]["base_path"], group, file_name
+                    config["global"]["base_path"], group, file_name
                 )
 
                 if os.path.isabs(deploy_path):
                     abs_deploy_path = deploy_path
                 else:
                     abs_deploy_path = os.path.join(
-                        config["settings"]["base_path"], deploy_path
+                        config["global"]["base_path"], deploy_path
                     )
 
                 if settings.get("backup", "false").lower() in ["true", "yes"]:
