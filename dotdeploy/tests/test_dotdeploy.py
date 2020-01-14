@@ -6,7 +6,7 @@ import mock
 import io
 import copy
 
-from dotdeploy import DotDeploy
+from dotdeploy.dotdeploy import DotDeploy
 
 # pylint: disable=no-member
 
