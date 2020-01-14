@@ -17,4 +17,5 @@ setup(
     packages=find_packages(exclude=["tests"]),
     zip_safe=False,
     entry_points={"console_scripts": ["dotdeploy = dotdeploy.cli:main"]},
+    extras_require={"dev": ["pylint", "black", "mock", "coverage", "nose2"]},
 )

@@ -30,8 +30,8 @@ chmod +x /usr/local/bin/dotdeploy
 python3 -m venv venv
 # activate environment
 source venv/bin/activate
-# install requirements
-pip install pylint black mock coverage nose2
+# install dotdeploy editable with dev requirements
+pip install --editable ".[dev]"
 ```
 
 #### running unittests
